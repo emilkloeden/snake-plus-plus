@@ -42,6 +42,7 @@ GAME_OVER_IMAGE = "gameover.png"
 APPLE_IMAGE = "apple.png"
 RESIZER_IMAGE = "resizer.png"
 PLUS_IMAGE = "plus.png"
+SCORE_KEEPER_IMAGE = "square.png"
 SMILEY_IMAGE = "smiley.png"
 
 LEFT = "🠔"
@@ -105,6 +106,11 @@ class Incrementor(Interactable):
     def __init__(self, x, y, image, groups, color=DARK):
         super().__init__(x, y, image, groups, color)
     
+
+
+class ScoreKeeper(Interactable):
+    def __init__(self, x, y, image, groups, color=DARK):
+        super().__init__(x, y, image, groups, color)
 
 class Snake:
     def __init__(self, length, target_surface) -> None:
@@ -264,12 +270,16 @@ class Level:
         interstitial_incrementor_image = pygame.image.load(os.path.join("assets", PLUS_IMAGE)).convert_alpha()
         self.incrementor_image = pygame.transform.scale(interstitial_incrementor_image, (self.interactable_width, self.interactable_height))
         
+        interstitial_score_keeper_image = pygame.image.load(os.path.join("assets", SCORE_KEEPER_IMAGE)).convert_alpha()
+        self.score_keeper_image = pygame.transform.scale(interstitial_score_keeper_image, (self.interactable_width, self.interactable_height))
+        
         self.smiley_image = pygame.image.load(os.path.join("assets", SMILEY_IMAGE)).convert_alpha()
         self.score_images = load_score_images()
 
 
         self.score = STARTING_SCORE
         self.can_collect_bonus = False
+        self.keep_score = False
 
         self.create_snake()        
         self.create_apple(self.apple_image)
@@ -309,10 +319,14 @@ class Level:
     def spawn_bonus(self):
         self.can_collect_bonus = False
         x, y = self.choose_spot() 
-        if random.random() > 0.5:
+         
+        random_val = random.random()
+        if random_val < 0.45:
             Resizer(x, y, self.rezizer_image, [self.interactable_sprites])
-        else:
+        elif random_val < 0.9 :
             Incrementor(x, y, self.incrementor_image, [self.interactable_sprites])
+        else:
+            ScoreKeeper(x, y, self.score_keeper_image, [self.interactable_sprites])
 
     def run(self):
         while True:
@@ -326,7 +340,6 @@ class Level:
             else:
                 self.screen.blit(self.game_over_image, (0,0))
                 self.draw_score()
-                # print_text(self.screen, "Game Over")
                 self.handle_input()
             
             pygame.display.update()
@@ -339,14 +352,13 @@ class Level:
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.KEYDOWN and not self.running:
-                self.restart()
+                self.restart(self.keep_score)
             elif event.type == pygame.KEYDOWN and not FOUR_BUTTON_MODE:
                 self.snake.handle_event(event)
         self.snake.handle_input()
 
 
     def update(self):
-        # spawn_apple
         self.snake.update()
         self.handle_collections()
         self.handle_collisions()
@@ -384,9 +396,10 @@ class Level:
         for sprite in self.collision_sprites:
             sprite.draw(self.screen)
 
-    def restart(self):
+    def restart(self, keep_score=False):
         self.snake = Snake(INITIAL_SNAKE_LENGTH, self.screen)
-        self.score = STARTING_SCORE
+        if not keep_score:
+            self.score = STARTING_SCORE
         self.running = True
 
     def handle_collections(self):
@@ -409,6 +422,8 @@ class Level:
                     self.snake.shrink()
                 elif isinstance(interactable, Incrementor):
                     self.score += INCREMENT_BONUS
+                elif isinstance(interactable, ScoreKeeper):
+                    self.keep_score = True
 
     def handle_collisions(self):
         head = self.snake.body_sprites[0]
