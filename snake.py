@@ -1,8 +1,11 @@
+from turtle import right
 import pygame
 import random
 import sys
 
-SCALE = 10
+SCALE = 1
+SCORE_SCALE = 4
+STARTING_SCORE = 0
 
 ORIGINAL_SCREEN_WIDTH = 84
 ORIGINAL_SCREEN_HEIGHT = 48
@@ -11,10 +14,10 @@ SCREEN_WIDTH = ORIGINAL_SCREEN_WIDTH * SCALE
 SCREEN_HEIGHT= ORIGINAL_SCREEN_HEIGHT * SCALE
 
 INITIAL_SNAKE_LENGTH = 3
-WALL_WIDTH = 2
+WALL_WIDTH = 4
 BLOCK_SIZE = 4
-# APPLE_SIZE = 3
 
+SPAWN_RATE = 2
 
 
 LIGHT = "#c7f0d8"
@@ -24,6 +27,8 @@ BLACK = "#000000"
 
 GAME_OVER_IMAGE = "gameover.png"
 APPLE_IMAGE = "apple.png"
+RESIZER_IMAGE = "resizer.png"
+SMILEY_IMAGE = "smiley.png"
 
 LEFT = "🠔"
 RIGHT = "🠖"
@@ -61,32 +66,27 @@ class SnakeBodyPixel:
         target_surface.blit(self.image, (self.rect.x, self.rect.y))
 
 
-class Apple (pygame.sprite.Sprite):
-    def __init__(self, x, y, image, groups, color=DARK) -> None:
+
+class Interactable(pygame.sprite.Sprite):
+    def __init__(self, x, y, image, groups, color=DARK):
         super().__init__(groups)
-        # self.image_segments = []
-        # for y, row in enumerate(apple_map):
-        #     for x, cell in enumerate(row):
-        #         self.image_segments.append((x*SCALE, y*SCALE, cell, pygame.Surface((1*SCALE, 1*SCALE))))
-        # print(f"{[(r[0], r[1], r[2]) for r in self.image_segments]=}")
         self.image = image
         self.color = color
         self.rect = self.image.get_rect()
         self.rect.x = x
         self.rect.y = y
-        # print(f"{self.rect.topleft=}")
 
     def draw(self, target_surface):
-        self.image.fill(self.color)
         target_surface.blit(self.image, (self.rect.x, self.rect.y))
-        # for segment in self.image_segments:
-        #     print(f"{segment=}")
-        #     x, y, c, image = segment
-        #     if c == 'X': 
-        #         target_surface.blit(image, (self.rect.x + x, self.rect.y +y))
 
+class Apple(Interactable):
+    def __init__(self, x, y, image, groups, color=DARK):
+        super().__init__(x, y, image, groups, color)
+        
+class Resizer(Interactable):
+    def __init__(self, x, y, image, groups, color=DARK):
+        super().__init__(x, y, image, groups, color)
     
-
 
 class Snake:
     def __init__(self, length, target_surface) -> None:
@@ -172,6 +172,13 @@ class Snake:
             y -= SCALE
         self.body_sprites.append(SnakeBodyPixel(x, y, self.direction, self.size, color=DARK))
     
+    def shrink(self):
+        current_num_body_parts = len(self.body_sprites) 
+        print(f"Before shrink: {current_num_body_parts=}")
+        next_num_body_parts = self.length if current_num_body_parts // 2 < self.length else current_num_body_parts // 2
+        self.body_sprites = self.body_sprites[:next_num_body_parts]
+        print(f"After shrink: {len(self.body_sprites)}")
+    
     def update(self):
         head = self.body_sprites[0]
         # store our current position in the variable to be used by the next sprite
@@ -226,14 +233,26 @@ class Level:
         self.game_over_image = pygame.transform.scale(interstitial_game_over_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
         self.collision_sprites = pygame.sprite.Group()
+        self.interactable_sprites = pygame.sprite.Group()
+
         interstitial_apple_image = pygame.image.load(APPLE_IMAGE).convert_alpha()
-        apple_width = interstitial_apple_image.get_width() * SCALE
-        apple_height = interstitial_apple_image.get_height() * SCALE
-        self.apple_image = pygame.transform.scale(interstitial_apple_image, (apple_width, apple_height))
+        self.interactable_width = interstitial_apple_image.get_width() * SCALE
+        self.interactable_height = interstitial_apple_image.get_height() * SCALE
+        self.apple_image = pygame.transform.scale(interstitial_apple_image, (self.interactable_width, self.interactable_height))
         
+        interstitial_resizer_image = pygame.image.load(RESIZER_IMAGE).convert_alpha()
+        self.rezizer_image = pygame.transform.scale(interstitial_resizer_image, (self.interactable_width, self.interactable_height))
+        
+        self.smiley_image = pygame.image.load(SMILEY_IMAGE).convert_alpha()
+        self.score_images = load_score_images()
+
+
+        self.score = STARTING_SCORE
+        self.can_collect_bonus = False
+
+        self.create_snake()        
         self.create_apple(self.apple_image)
         
-        self.create_snake()        
         self.create_map()
 
         self.running = True
@@ -241,9 +260,18 @@ class Level:
 
     def create_apple(self, image):
         self.apple = pygame.sprite.GroupSingle()
-        x = random.randint(1, ORIGINAL_SCREEN_WIDTH-1) * SCALE
-        y = random.randint(1, ORIGINAL_SCREEN_HEIGHT-1) * SCALE
+        x, y = self.choose_spot() 
         Apple(x, y, image, [self.apple])
+
+    def choose_spot(self):
+        "This attempts to ensure apples won't spawn under the snake"
+        x = random.randint(WALL_WIDTH*SCALE, ((ORIGINAL_SCREEN_WIDTH-WALL_WIDTH) * SCALE) -self.interactable_width)
+        y = random.randint(WALL_WIDTH*SCALE, ((ORIGINAL_SCREEN_HEIGHT-WALL_WIDTH) * SCALE) - self.interactable_height)
+        temp_rect = pygame.Rect(x, y, self.interactable_width, self.interactable_height)
+        for sprite in self.snake.body_sprites:
+            if sprite.rect.colliderect(temp_rect):
+                return self.choose_spot()
+        return x,y
 
     def create_snake(self):
         self.snake = Snake(INITIAL_SNAKE_LENGTH, self.screen)
@@ -254,10 +282,14 @@ class Level:
 
         top=Wall(x=0, y=0, width=ORIGINAL_SCREEN_WIDTH, height=WALL_WIDTH, groups=groups)
         bottom=Wall(x=0, y=SCREEN_HEIGHT-SCALE*WALL_WIDTH, width=ORIGINAL_SCREEN_WIDTH, height=WALL_WIDTH, groups=groups)
-        left=Wall(x=0, y=0, width=WALL_WIDTH, height=ORIGINAL_SCREEN_HEIGHT, groups=groups)
-        right=Wall(x=SCREEN_WIDTH-SCALE*WALL_WIDTH, y=0, width=WALL_WIDTH, height=ORIGINAL_SCREEN_HEIGHT, groups=groups)
+        left=Wall(x=0, y=0, width=WALL_WIDTH*0.5, height=ORIGINAL_SCREEN_HEIGHT, groups=groups)
+        right=Wall(x=SCREEN_WIDTH-SCALE*WALL_WIDTH*0.5, y=0, width=WALL_WIDTH*0.5, height=ORIGINAL_SCREEN_HEIGHT, groups=groups)
         
+    def spawn_bonus(self):
+        self.can_collect_bonus = False
+        x, y = self.choose_spot() 
 
+        Resizer(x, y, self.rezizer_image, [self.interactable_sprites])
 
     def run(self):
         while True:
@@ -265,8 +297,12 @@ class Level:
                 self.handle_input()
                 self.update()
                 self.draw()
+                
+                if self.score > 0 and self.score % SPAWN_RATE == 0 and self.can_collect_bonus:
+                    self.spawn_bonus()
             else:
                 self.screen.blit(self.game_over_image, (0,0))
+                self.draw_score()
                 # print_text(self.screen, "Game Over")
                 self.handle_input()
             
@@ -292,25 +328,64 @@ class Level:
         self.handle_collections()
         self.handle_collisions()
 
+
+    def draw_score(self):
+        score_str = str(self.score)
+        y = (WALL_WIDTH + 1) * SCALE
+        x = (ORIGINAL_SCREEN_WIDTH - WALL_WIDTH -1) * SCALE
+        
+        # print(f"drawing score {self.score=} {x=} {y=} {len(score_str)=}")
+        if len(score_str) == 1:
+            image = self.score_images[score_str]
+            self.screen.blit(image, (x, y))
+        elif len(score_str) == 2:
+            left_score_str = score_str[0]
+            right_score_str = score_str[-1]
+            right_image = self.score_images[right_score_str]
+            self.screen.blit(right_image, (x, y))
+            
+            left_image = self.score_images[left_score_str]
+            x -= right_image.get_width()
+            self.screen.blit(left_image, (x, y))
+            print(f"{x=} {y=} {left_score_str=} {right_score_str=} {score_str=}")
+        else:
+            self.screen.blit(self.smiley_image, (x, y))
+
     def draw(self):
         self.screen.fill(LIGHT)
         if self.running:
+            self.draw_score()
             self.snake.draw()
             # if apple, draw apple
             self.apple.draw(self.screen)
+            for sprite in self.interactable_sprites:
+                sprite.draw(self.screen)
         for sprite in self.collision_sprites:
             sprite.draw(self.screen)
 
     def restart(self):
         self.snake = Snake(INITIAL_SNAKE_LENGTH, self.screen)
+        self.score = STARTING_SCORE
         self.running = True
 
     def handle_collections(self):
         head = self.snake.body_sprites[0]
         apple = self.apple.sprite
         if apple.rect.colliderect(head.rect):
+            self.score += 1
+            if self.score % SPAWN_RATE != 0 and self.interactable_sprites:
+                for interactable in self.interactable_sprites:
+                    interactable.kill()
+            if self.score % SPAWN_RATE == 0 and not self.interactable_sprites:
+                self.can_collect_bonus = True
             self.snake.grow()
             self.create_apple(self.apple_image)
+
+        for interactable in self.interactable_sprites:
+            if interactable.rect.colliderect(head.rect):
+                interactable.kill()
+                if isinstance(interactable, Resizer):
+                    self.snake.shrink()
 
     def handle_collisions(self):
         head = self.snake.body_sprites[0]
@@ -354,6 +429,15 @@ def get_next_pos(sprite, speed, direction):
 
     return next_x, next_y
 
+
+def load_score_images():
+    scaled_images = {}
+    for i in range(10):
+        interstitial_image = pygame.image.load(f"{i}.png").convert_alpha()
+        image = pygame.transform.scale(interstitial_image, (SCORE_SCALE*SCALE, SCORE_SCALE*SCALE))
+        scaled_images[str(i)] = image
+
+    return scaled_images
 
 def main():
     game = Game()
