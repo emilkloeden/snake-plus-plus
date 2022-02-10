@@ -2,8 +2,9 @@ from turtle import right
 import pygame
 import random
 import sys
+import os
 
-SCALE = 1
+SCALE = 2
 SCORE_SCALE = 4
 STARTING_SCORE = 0
 
@@ -229,21 +230,21 @@ class Wall(pygame.sprite.Sprite):
 class Level:
     def __init__(self):
         self.screen = pygame.display.get_surface()
-        interstitial_game_over_image = pygame.image.load(GAME_OVER_IMAGE).convert_alpha()
+        interstitial_game_over_image = pygame.image.load(os.path.join("assets", GAME_OVER_IMAGE)).convert_alpha()
         self.game_over_image = pygame.transform.scale(interstitial_game_over_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
         self.collision_sprites = pygame.sprite.Group()
         self.interactable_sprites = pygame.sprite.Group()
 
-        interstitial_apple_image = pygame.image.load(APPLE_IMAGE).convert_alpha()
+        interstitial_apple_image = pygame.image.load(os.path.join("assets", APPLE_IMAGE)).convert_alpha()
         self.interactable_width = interstitial_apple_image.get_width() * SCALE
         self.interactable_height = interstitial_apple_image.get_height() * SCALE
         self.apple_image = pygame.transform.scale(interstitial_apple_image, (self.interactable_width, self.interactable_height))
         
-        interstitial_resizer_image = pygame.image.load(RESIZER_IMAGE).convert_alpha()
+        interstitial_resizer_image = pygame.image.load(os.path.join("assets", RESIZER_IMAGE)).convert_alpha()
         self.rezizer_image = pygame.transform.scale(interstitial_resizer_image, (self.interactable_width, self.interactable_height))
         
-        self.smiley_image = pygame.image.load(SMILEY_IMAGE).convert_alpha()
+        self.smiley_image = pygame.image.load(os.path.join("assets", SMILEY_IMAGE)).convert_alpha()
         self.score_images = load_score_images()
 
 
@@ -331,10 +332,9 @@ class Level:
 
     def draw_score(self):
         score_str = str(self.score)
-        y = (WALL_WIDTH + 1) * SCALE
-        x = (ORIGINAL_SCREEN_WIDTH - WALL_WIDTH -1) * SCALE
+        y = (WALL_WIDTH + SCORE_SCALE) * SCALE
+        x = (ORIGINAL_SCREEN_WIDTH - WALL_WIDTH -SCORE_SCALE) * SCALE
         
-        # print(f"drawing score {self.score=} {x=} {y=} {len(score_str)=}")
         if len(score_str) == 1:
             image = self.score_images[score_str]
             self.screen.blit(image, (x, y))
@@ -347,7 +347,6 @@ class Level:
             left_image = self.score_images[left_score_str]
             x -= right_image.get_width()
             self.screen.blit(left_image, (x, y))
-            print(f"{x=} {y=} {left_score_str=} {right_score_str=} {score_str=}")
         else:
             self.screen.blit(self.smiley_image, (x, y))
 
@@ -433,7 +432,7 @@ def get_next_pos(sprite, speed, direction):
 def load_score_images():
     scaled_images = {}
     for i in range(10):
-        interstitial_image = pygame.image.load(f"{i}.png").convert_alpha()
+        interstitial_image = pygame.image.load(os.path.join("assets", f"{i}.png")).convert_alpha()
         image = pygame.transform.scale(interstitial_image, (SCORE_SCALE*SCALE, SCORE_SCALE*SCALE))
         scaled_images[str(i)] = image
 
