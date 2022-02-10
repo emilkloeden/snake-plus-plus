@@ -4,7 +4,18 @@ import random
 import sys
 import os
 
-SCALE = 2
+SCALE = 1
+
+try:
+    with open(os.path.join("assets", "scale.txt"), "r") as f:
+        SCALE = int(f.readline().strip())
+        if SCALE > 10:
+            SCALE = 10
+        elif SCALE < 1:
+            SCALE = 1
+except Exception:
+    SCALE = 1
+
 SCORE_SCALE = 4
 STARTING_SCORE = 0
 
@@ -18,7 +29,8 @@ INITIAL_SNAKE_LENGTH = 3
 WALL_WIDTH = 4
 BLOCK_SIZE = 4
 
-SPAWN_RATE = 2
+SPAWN_RATE = 5
+INCREMENT_BONUS = 3
 
 
 LIGHT = "#c7f0d8"
@@ -29,6 +41,7 @@ BLACK = "#000000"
 GAME_OVER_IMAGE = "gameover.png"
 APPLE_IMAGE = "apple.png"
 RESIZER_IMAGE = "resizer.png"
+PLUS_IMAGE = "plus.png"
 SMILEY_IMAGE = "smiley.png"
 
 LEFT = "🠔"
@@ -85,6 +98,10 @@ class Apple(Interactable):
         super().__init__(x, y, image, groups, color)
         
 class Resizer(Interactable):
+    def __init__(self, x, y, image, groups, color=DARK):
+        super().__init__(x, y, image, groups, color)
+        
+class Incrementor(Interactable):
     def __init__(self, x, y, image, groups, color=DARK):
         super().__init__(x, y, image, groups, color)
     
@@ -175,10 +192,10 @@ class Snake:
     
     def shrink(self):
         current_num_body_parts = len(self.body_sprites) 
-        print(f"Before shrink: {current_num_body_parts=}")
+        # print(f"Before shrink: {current_num_body_parts=}")
         next_num_body_parts = self.length if current_num_body_parts // 2 < self.length else current_num_body_parts // 2
         self.body_sprites = self.body_sprites[:next_num_body_parts]
-        print(f"After shrink: {len(self.body_sprites)}")
+        # print(f"After shrink: {len(self.body_sprites)}")
     
     def update(self):
         head = self.body_sprites[0]
@@ -244,6 +261,9 @@ class Level:
         interstitial_resizer_image = pygame.image.load(os.path.join("assets", RESIZER_IMAGE)).convert_alpha()
         self.rezizer_image = pygame.transform.scale(interstitial_resizer_image, (self.interactable_width, self.interactable_height))
         
+        interstitial_incrementor_image = pygame.image.load(os.path.join("assets", PLUS_IMAGE)).convert_alpha()
+        self.incrementor_image = pygame.transform.scale(interstitial_incrementor_image, (self.interactable_width, self.interactable_height))
+        
         self.smiley_image = pygame.image.load(os.path.join("assets", SMILEY_IMAGE)).convert_alpha()
         self.score_images = load_score_images()
 
@@ -289,8 +309,10 @@ class Level:
     def spawn_bonus(self):
         self.can_collect_bonus = False
         x, y = self.choose_spot() 
-
-        Resizer(x, y, self.rezizer_image, [self.interactable_sprites])
+        if random.random() > 0.5:
+            Resizer(x, y, self.rezizer_image, [self.interactable_sprites])
+        else:
+            Incrementor(x, y, self.incrementor_image, [self.interactable_sprites])
 
     def run(self):
         while True:
@@ -385,6 +407,8 @@ class Level:
                 interactable.kill()
                 if isinstance(interactable, Resizer):
                     self.snake.shrink()
+                elif isinstance(interactable, Incrementor):
+                    self.score += INCREMENT_BONUS
 
     def handle_collisions(self):
         head = self.snake.body_sprites[0]
@@ -396,7 +420,35 @@ class Level:
 
         for i, sprite in enumerate(body_sprites):
             if sprite.rect.colliderect(head.rect):
-                print(f"{i=} {head.rect.topleft=} {head.rect.bottomright=} {sprite.rect.topleft=} {sprite.rect.bottomright=}")
+                # print(f"{i=} {head.rect.topleft=} {head.rect.bottomright=} {sprite.rect.topleft=} {sprite.rect.bottomright=}")
+                self.running = False
+
+
+class IntroScreen():
+    def __init__(self):
+        self.screen = pygame.display.get_surface()
+        interstitial_image = pygame.image.load(os.path.join("assets", "title.png"))
+        self.image = pygame.transform.scale(interstitial_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.clock = pygame.time.Clock()
+        self.running = True
+
+    def run(self):
+        while self.running:
+            self.handle_input()
+            self.draw()
+            pygame.display.update()
+            self.clock.tick()
+
+    def draw(self):
+        self.screen.fill(LIGHT)
+        self.screen.blit(self.image, (0,0))
+
+    def handle_input(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
                 self.running = False
 
 
@@ -405,8 +457,10 @@ class Game:
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.NOFRAME)
         self.level = Level()
+        self.intro_screen = IntroScreen()
 
     def run(self):
+        self.intro_screen.run()
         self.level.run()
         
 
