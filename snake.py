@@ -232,6 +232,10 @@ class Level:
         self.rezizer_image = load_scaled_image("resizer")
         self.incrementor_image = load_scaled_image("plus")
         self.score_keeper_image = load_scaled_image("square")
+
+        # Used by choose_spot(). It's a bit hacky in that it relies on
+        # all collectables being the same dimensions
+        self.interactable_width, self.interactable_height = self.apple_image.get_size()
         
         self.score = STARTING_SCORE
         self.can_collect_bonus = False
@@ -324,7 +328,7 @@ class Level:
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.KEYDOWN and not self.running:
-                self.restart(self.keep_score)
+                self.restart()
             elif event.type == pygame.KEYDOWN:
                 self.snake.handle_event(event)
         
@@ -357,9 +361,11 @@ class Level:
         for sprite in self.collision_sprites:
             sprite.draw(self.screen)
 
-    def restart(self, keep_score=False):
+    def restart(self):
         self.snake = Snake(INITIAL_SNAKE_LENGTH, self.screen)
-        if not keep_score:
+        if self.keep_score:
+            self.keep_score = False
+        else:
             self.score = STARTING_SCORE
         self.running = True
 
